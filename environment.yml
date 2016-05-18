@@ -1,0 +1,9 @@
+name: aggregate
+dependencies:
+  - python=2
+  - matplotlib
+  - numpy
+  - vtk
+  - ipython
+  - scipy
+  - mayavi
