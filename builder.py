@@ -10,7 +10,6 @@ Aggregate building module.
 
 from __future__ import print_function
 import numpy as np
-from particle import Particle
 from simulation import Simulation
 
 debug = False
@@ -21,7 +20,7 @@ def build_bpca(num_pcles=128, radius=1.):
      allowing it to stick where it first intersects another particle."""
 
     sim = Simulation(max_pcles=num_pcles)
-    sim.add(Particle(x=0., y=0., z=0., r=radius), check=False)
+    sim.add( (0.,0.,0.,radius), check=False)
 
     # generate a "proposed" particle and trajectory, and see where it intersects the
     # aggregate. add the new particle at this point!
@@ -42,7 +41,7 @@ def build_bpca(num_pcles=128, radius=1.):
             # shift the origin along the line from the particle centre to the intersect
             hit += (hit-sim.pos[ids])
             # Add to the simulation, checking for overlap with existing partilces (returns False if overlap detected)
-            success = sim.add(Particle(x=hit[0], y=hit[1], z=hit[2], r=radius), check=True)
+            success = sim.add(hit, radius, check=True)
             # if proposed particle is acceptable, add to the sim and carry on
             if success & debug: print('Adding particle at distance %f' % np.linalg.norm(hit))
 
@@ -129,71 +128,3 @@ def sphere_line(centre, radius, line_start, line_end):
     p2 = np.array(p2) if p2 is not None else p2
 
     return p1, p2
-
-
-
-
-#=========== old coordinates
-# def build_bpca(num_pcles=128, radius=1., through_orig=False):
-#     """Build a simple ballistic particle cluster aggregate by generating particle and
-#      allowing it to stick where it first intersects another particle."""
-#
-#     sim = Simulation(max_pcles=num_pcles)
-#     sim.add(Particle(x=0., y=0., z=0., r=radius), check=False)
-#
-#     # generate a "proposed" particle and trajectory, and see where it intersects the
-#     # aggregate. add the new particle at this point!
-#     for n in range(num_pcles-1):
-#
-#         success = False
-#         while not success:
-#
-#             print 'Generating particle %d of %d' % (n+1, num_pcles)
-#
-#             if through_orig:
-#                 second = np.array( [0.,0.,0.] )
-#             else:
-#                 second = random_sphere() * max(sim.farthest() * 2., radius *4.)
-#
-#             test_pt = random_sphere() * max(sim.farthest() * 2., radius *4.)
-#             dist = np.linalg.norm(test_pt)
-#             intersect = None
-#             particle = None
-#
-#             for pcle in sim.particles:
-#                 if debug: print 'Checking intersect with particle %d' % pcle.id
-#                 i1, i2 = sphere_line((pcle.x, pcle.y, pcle.z), pcle.r, test_pt, second )
-#                 if i1 is None and i2 is None:
-#                     if debug: print('No intersection with particle %d' % pcle.id)
-#                     continue
-#                 else:
-#                     i1 = 0 if None else i1
-#                     i2 = 0 if None else i2
-#                     if (np.linalg.norm(i1-test_pt) < np.linalg.norm(i2-test_pt) ):
-#                         selected = i1
-#                     else:
-#                         selected = i2 # should always be the case here
-#                     distance = np.linalg.norm(test_pt-selected)
-#                     # look for the closest to the test point
-#                     if distance < dist:
-#                         if debug: print 'Intersect with pcle %d at distance %f' % (pcle.id, distance)
-#                         dist = distance
-#                         intersect = selected
-#                         particle = pcle
-#
-#             if particle is None:
-#                 success = False
-#                 continue
-#
-#             # shift the origin along the line from the particle centre to the intersect
-#             pcle_pos = np.array( [particle.x, particle.y, particle.z] )
-#             shift = np.linalg.norm(intersect-pcle_pos)
-#             vec = (intersect-pcle_pos) / shift
-#             intersect += vec*shift
-#
-#             # Add to the simulation, checking for overlap with existing partilces (returns False if overlap detected)
-#             success = sim.add(Particle(x=intersect[0], y=intersect[1], z=intersect[2], r=radius), check=True)
-#             # if proposed particle is acceptable, add to the sim and carry on
-#             if success & debug: print 'Adding particle at distance %f' % np.linalg.norm(intersect)
-#
-#     return sim

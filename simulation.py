@@ -7,13 +7,10 @@ Mark S. Bentley (mark@lunartech.org), 2016
 Simulation environment module."""
 
 import numpy as np
+import matplotlib.pyplot as plt
 from scipy.spatial.distance import pdist, cdist
 
 debug = False
-
-# TODO: store particle data in numpy arrays. This should allow efficient selection,
-# e.g. to do bounding box checking to see particles are potentially close to the new
-# one when checking for overlaps.
 
 class Simulation:
 
@@ -26,7 +23,6 @@ class Simulation:
         need to be stored in the array, but those that may be queried for
         particle selection should be (for speed)."""
 
-        self.particles = []
         self.pos = np.zeros( (max_pcles, 3 ), dtype=np.float )
         self.id = np.zeros( max_pcles, dtype=np.int )
         self.radius =  np.zeros( max_pcles, dtype=np.float )
@@ -39,7 +35,7 @@ class Simulation:
         """
         Returns a string with the number of particles and the bounding box size.
         """
-        return "<Simulation object contaning %d particles>" % ( len(self.particles) )
+        return "<Simulation object contaning %d particles>" % ( self.count )
 
     #__add__, __sub__, and __mul__
 
@@ -64,7 +60,7 @@ class Simulation:
         return
 
 
-    def add(self, pcle, check=True):
+    def add(self, pos, radius, check=True):
         """
         Add a particle to the simulation. If check=True the distance between the proposed
         particle and each other is checked so see if they overlap. If so, False is returned.
@@ -74,10 +70,17 @@ class Simulation:
             if not self.check(pcle):
                 return False
 
-        self.particles.append(pcle)
-        self.pos[self.count] = (pcle.x, pcle.y, pcle.z)
-        self.radius[self.count] = pcle.r
-        self.mass[self.count] = (4./3.)*np.pi*pcle.r**3.
+        if len(pos) != 3:
+            print('ERROR: particle position should be given as an x,y,z tuple')
+            return None
+
+        if len(radius) != 1:
+            print('ERROR: particle radius must be a single value')
+            return None
+
+        self.pos[self.count] = pcle[0:3]
+        self.radius[self.count] = pcle[3]
+        self.mass[self.count] = (4./3.)*np.pi*pcle[3]
 
         self.count += 1
         if pcle.id is None:
@@ -159,44 +162,62 @@ class Simulation:
         return (1. - ( (self.mass[:self.count].sum()) / ((4./3.)*np.pi*self.gyration()**3.) ) )
 
 
-    def fractal_mass_radius(self, num_pts=100, prefactor=None, show=False):
+    def fractal_scaling(self, prefactor=1.27):
+
+        # N = k * (Rg/a)**Df
+        return np.log(self.count/prefactor)/np.log(self.gyration()/self.radius.min())
+
+
+    def fractal_mass_radius(self, num_pts=100, show=False):
         """Calculate the fractal dimension of the domain using the relation:
 
         m(r) prop. r**D_m"""
 
+        r = np.linalg.norm(self.pos, axis=1)
+        start = self.radius.min()
+        stop = (self.farthest()+self.radius.max())*.8
+        step = (stop-start)/float(num_pts)
+        radii = np.arange(start, stop, step)
+        count = np.zeros(len(radii))
+
+        # TODO - implement sphere-sphere intersection and correctly calculate
+        # contribution from spheres at the boundary of the ROI.
+
+        for idx, i in enumerate(radii):
+            count[idx] =  r[r<=i].size
+
+        # Need to fit up until the curve is influenced by the outer edge
+        coeffs = np.polyfit(np.log(radii),np.log(count),1)
+        poly = np.poly1d(coeffs)
+
+        if show:
+            fig, ax = plt.subplots()
+            ax.loglog(radii, count)
+            ax.grid(True)
+            ax.set_xlabel('radius')
+            ax.set_ylabel('count')
+            yfit = lambda x: np.exp(poly(np.log(radii)))
+            ax.loglog(radii, yfit(radii))
+            plt.show()
+
+        return coeffs[0]
 
 
 
+    def fractal_box_count(self, num_grids=100):
+        """Calculate the fractal dimension of the domain using the cube-counting method"""
 
-    def position(self):
-        return np.array( [self.x, self.y, self.z] )
+        # need to determine if a square contains any of a sphere...
+        # first use a bounding box method to filter the domain
+        xmin = self.pos[:,0].min() - self.radius[np.argmin(self.pos[:,0])]
+        xmax = self.pos[:,0].max() + self.radius[np.argmin(self.pos[:,0])]
 
+        ymin = self.pos[:,1].min() - self.radius[np.argmin(self.pos[:,1])]
+        ymax = self.pos[:,1].max() + self.radius[np.argmin(self.pos[:,1])]
 
-    def to_array(self, id=False):
-
-        ndim = 4 if id else 3
-        pcle_array = np.ndarray( (self.count,ndim) )
-        for idx, pcle in enumerate(self.particles):
-            pcle_array[idx,0:3] = (pcle.x, pcle.y, pcle.z)
-            if id:
-                pcle_array[idx,3] = pcle.id
-        return pcle_array
+        zmin = self.pos[:,2].min() - self.radius[np.argmin(self.pos[:,2])]
+        zmax = self.pos[:,2].max() + self.radius[np.argmin(self.pos[:,2])]
 
 
     def to_csv(self, filename):
         np.savetxt(filename, self.pos, delimiter=",")
-
-
-#===== old coordinates
-    # def check_simple(self, pcle):
-    #
-    #     for p in self.particles:
-    #         if debug: print('Comparing to pcle %d' %p.id)
-    #         pvec = np.array( [p.x, p.y, p.z] )
-    #         pclevec = np.array( [pcle.x, pcle.y, pcle.z] )
-    #         if np.linalg.norm(pvec-pclevec) < (p.r+pcle.r):
-    #             if debug: print '%3.2f, %3.2f' % (np.linalg.norm(pvec-pclevec), (p.r+pcle.r))
-    #             if debug: print('Cannot add particle here!')
-    #             return False
-    #
-    #     return True
