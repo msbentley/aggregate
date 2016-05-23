@@ -8,13 +8,12 @@ Simulation environment module."""
 
 import numpy as np
 import matplotlib.pyplot as plt
-from scipy.spatial.distance import pdist, cdist
+from scipy.spatial.distance import cdist
 
-debug = False
 
 class Simulation:
 
-    def __init__(self, max_pcles=1000):
+    def __init__(self, max_pcles=1000, filename=None, debug=False):
         """Initialise the simulation. The key parameter here is the maximum number of particles,
         in order to pre-allocate array space.
 
@@ -23,12 +22,20 @@ class Simulation:
         need to be stored in the array, but those that may be queried for
         particle selection should be (for speed)."""
 
-        self.pos = np.zeros( (max_pcles, 3 ), dtype=np.float )
-        self.id = np.zeros( max_pcles, dtype=np.int )
-        self.radius =  np.zeros( max_pcles, dtype=np.float )
-        self.mass = np.zeros( max_pcles, dtype=np.float )
-        self.count = 0
-        self.next_id = 0
+        if (max_pcles is None) and (filename is None):
+            print('WARNING: simulation object created, but no size given - use max_pcles or sim.from_csv')
+        elif filename is not None:
+            self.from_csv(filename)
+        else:
+            self.pos = np.zeros( (max_pcles, 3 ), dtype=np.float )
+            self.id = np.zeros( max_pcles, dtype=np.int )
+            self.radius =  np.zeros( max_pcles, dtype=np.float )
+            self.mass = np.zeros( max_pcles, dtype=np.float )
+            self.count = 0
+            self.agg_count = 0
+            self.next_id = 0
+
+        self.debug = debug
 
 
     def __str__(self):
@@ -38,6 +45,22 @@ class Simulation:
         return "<Simulation object contaning %d particles>" % ( self.count )
 
     #__add__, __sub__, and __mul__
+
+
+
+    def get_bb(self):
+        """Return the bounding box of the simulation domain"""
+
+        xmin = self.pos[:,0].min() - self.radius[np.argmin(self.pos[:,0])]
+        xmax = self.pos[:,0].max() + self.radius[np.argmin(self.pos[:,0])]
+
+        ymin = self.pos[:,1].min() - self.radius[np.argmin(self.pos[:,1])]
+        ymax = self.pos[:,1].max() + self.radius[np.argmin(self.pos[:,1])]
+
+        zmin = self.pos[:,2].min() - self.radius[np.argmin(self.pos[:,2])]
+        zmax = self.pos[:,2].max() + self.radius[np.argmin(self.pos[:,2])]
+
+        return (xmin, xmax), (ymin,ymax), (zmin, zmax)
 
 
     def show(self, using='maya'):
@@ -60,33 +83,53 @@ class Simulation:
         return
 
 
-    def add(self, pos, radius, check=True):
+    def add(self, pos, radius, check=False):
         """
         Add a particle to the simulation. If check=True the distance between the proposed
         particle and each other is checked so see if they overlap. If so, False is returned.
         """
 
         if check:
-            if not self.check(pcle):
+            if not self.check(pos, radius):
                 return False
 
         if len(pos) != 3:
             print('ERROR: particle position should be given as an x,y,z tuple')
             return None
 
-        if len(radius) != 1:
-            print('ERROR: particle radius must be a single value')
-            return None
+        radius = float(radius)
 
-        self.pos[self.count] = pcle[0:3]
-        self.radius[self.count] = pcle[3]
-        self.mass[self.count] = (4./3.)*np.pi*pcle[3]
+        self.pos[self.count] = np.array(pos)
+        self.radius[self.count] = radius
+        self.mass[self.count] = (4./3.)*np.pi*radius**3.
 
         self.count += 1
-        if pcle.id is None:
-            pcle.id = self.next_id
-            self.id[self.count-1] = pcle.id
-            self.next_id += 1
+        self.id[self.count-1] = self.next_id
+        self.next_id += 1
+
+        return True
+
+
+
+    def add_agg(self, pos, radius, check=False):
+        """
+        Add an aggregate particle to the simulation. If check=True the distance between the proposed
+        particle and each other is checked so see if they overlap. If so, False is returned.
+        """
+
+        if check:
+            if not self.check(pos, radius):
+                return False
+
+        # TODO
+
+        self.pos[self.count] = np.array(pos)
+        self.radius[self.count] = radius
+        self.mass[self.count] = (4./3.)*np.pi*radius**3.
+
+        self.count += 1
+        self.id[self.count-1] = self.next_id
+        self.next_id += 1
 
         return True
 
@@ -125,11 +168,10 @@ class Simulation:
             return ids, hits
 
 
-    def check(self, pcle):
+    def check(self, pos, radius):
 
-        pcle_arr = np.array( [(pcle.x, pcle.y, pcle.z)] )
-        if (cdist(pcle_arr, self.pos[0:self.count+1])[0] < (pcle.r + self.radius[0:self.count+1].max())).sum() > 0:
-            if debug: print('Cannot add particle here!')
+        if (cdist(np.array([pos]), self.pos[0:self.count+1])[0] < (radius + self.radius[0:self.count+1].max())).sum() > 0:
+            if self.debug: print('Cannot add particle here!')
             return False
         else:
             return True
@@ -143,6 +185,20 @@ class Simulation:
         """Compute centre of mass"""
 
         return np.average(self.pos[:self.count], axis=0, weights=self.mass[:self.count])
+
+
+    def recentre(self):
+        """Re-centre the simulation such that the centre-of-mass of the assembly
+        is located at the origin (0,0,0)"""
+
+        self.pos -= self.com()
+
+
+    def move(self, vector):
+        """Move all particles in the simulation by the given vector"""
+
+        self.pos += vector
+
 
     def gyration(self):
         """Returns the radius of gyration: the RMS of the monomer distances from the
@@ -209,15 +265,52 @@ class Simulation:
 
         # need to determine if a square contains any of a sphere...
         # first use a bounding box method to filter the domain
-        xmin = self.pos[:,0].min() - self.radius[np.argmin(self.pos[:,0])]
-        xmax = self.pos[:,0].max() + self.radius[np.argmin(self.pos[:,0])]
+        (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
 
-        ymin = self.pos[:,1].min() - self.radius[np.argmin(self.pos[:,1])]
-        ymax = self.pos[:,1].max() + self.radius[np.argmin(self.pos[:,1])]
+        # need to determine minimum and maximum box sizes, and the increments
+        # to use when slicing the domain
 
-        zmin = self.pos[:,2].min() - self.radius[np.argmin(self.pos[:,2])]
-        zmax = self.pos[:,2].max() + self.radius[np.argmin(self.pos[:,2])]
+        r_min = self.radius.min()
+        max_div_x = int(np.ceil((xmax-xmin) / r_min))
+        max_div_y = int(np.ceil((ymax-ymin) / r_min))
+        max_div_z = int(np.ceil((zmax-zmin) / r_min))
 
+        # calculate:
+        # Df = Log(# cubes covering object) / log( 1/ box size)
+
+        # pseudo-code from http://paulbourke.net/fractals/cubecount/
+       # for all offsets
+       #    for all box sizes s
+       #       N(s) = 0
+       #       for all box positions
+       #          for all voxels inside the current box
+       #             if the voxel is part of the object
+       #                N(s) = N(s) + 1
+       #                stop searching voxels in the current box
+       #             end
+       #          end
+       #       end
+       #    end
+       # end
 
     def to_csv(self, filename):
-        np.savetxt(filename, self.pos, delimiter=",")
+        """Write key simulation variables (id, position and radius) to a CSV file"""
+        headertxt = 'id, x, y, z, radius'
+        np.savetxt(filename, np.hstack( (self.id[:,np.newaxis], self.pos, self.radius[:,np.newaxis]) ),
+            delimiter=",", header=headertxt)
+
+    def from_csv(self, filename):
+        """Initialise simulation based on a file containing particle ID, position and radius.
+
+        Note that particles with the same ID will be treated as members of an aggregate"""
+
+        simdata = np.genfromtxt(filename, comments='#', delimiter=',')
+        self.id = simdata[:,0].astype(np.int)
+        self.pos = simdata[:,1:4]
+        self.radius = simdata[:,4]
+        self.mass = (4./3.)*np.pi*self.radius**3.
+        self.count = len(self.id)
+        self.next_id = self.id.max()+1
+        self.agg_count = len(np.unique(self.id))
+
+        return
