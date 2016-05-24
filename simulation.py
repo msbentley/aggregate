@@ -12,15 +12,22 @@ from scipy.spatial.distance import cdist
 
 
 class Simulation:
+    """
+    This class provides functionality for a generic particle simulation, with methods for
+    adding particles, moving them in the simulation domain, checking for intersects and
+    overlaps etc. It also calculates basic properties of particle collections within the domain.
+    """
 
     def __init__(self, max_pcles=1000, filename=None, debug=False):
-        """Initialise the simulation. The key parameter here is the maximum number of particles,
+        """
+        Initialise the simulation. The key parameter here is the maximum number of particles,
         in order to pre-allocate array space.
 
         nattr=<int> can be used to set the number of additional attributes (besides
         x,y,z,r and id) to be stored in the array. Not all particle attributes
         need to be stored in the array, but those that may be queried for
-        particle selection should be (for speed)."""
+        particle selection should be (for speed).
+        """
 
         if (max_pcles is None) and (filename is None):
             print('WARNING: simulation object created, but no size given - use max_pcles or sim.from_csv')
@@ -44,12 +51,12 @@ class Simulation:
         """
         return "<Simulation object contaning %d particles>" % ( self.count )
 
-    #__add__, __sub__, and __mul__
-
 
 
     def get_bb(self):
-        """Return the bounding box of the simulation domain"""
+        """
+        Return the bounding box of the simulation domain
+        """
 
         xmin = self.pos[:,0].min() - self.radius[np.argmin(self.pos[:,0])]
         xmax = self.pos[:,0].max() + self.radius[np.argmin(self.pos[:,0])]
@@ -63,9 +70,12 @@ class Simulation:
         return (xmin, xmax), (ymin,ymax), (zmin, zmax)
 
 
+
     def show(self, using='maya'):
-        """A simple scatter-plot to represent the aggregate - either using mpl
-        or mayavi"""
+        """
+        A simple scatter-plot to represent the aggregate - either using mpl
+        or mayavi
+        """
 
         if using=='mpl':
 
@@ -81,6 +91,7 @@ class Simulation:
             points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
 
         return
+
 
 
     def add(self, pos, radius, check=False):
@@ -134,7 +145,14 @@ class Simulation:
         return True
 
 
+
     def intersect(self, position, direction, closest=True):
+        """
+        Accepts a position and direction vector defining a line and determines which
+        particles in the simulation intersect this line, and the locations of these
+        intersections. If closest=True only the shortest (closest) intersect is
+        returned, otherwise all values are given.
+        """
 
         # see, for example, https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
 
@@ -168,7 +186,13 @@ class Simulation:
             return ids, hits
 
 
+
     def check(self, pos, radius):
+        """
+        Accepts a proposed particle position and radius and checks if this overlaps with any
+        particle currently in the domain. Returns True if the position is acceptable or
+        False if not.
+        """
 
         if (cdist(np.array([pos]), self.pos[0:self.count+1])[0] < (radius + self.radius[0:self.count+1].max())).sum() > 0:
             if self.debug: print('Cannot add particle here!')
@@ -177,21 +201,33 @@ class Simulation:
             return True
 
 
+
     def farthest(self):
+        """
+        Returns the centre of the particle farthest from the origin
+        """
+
         return self.pos.max()
 
 
+
     def com(self):
-        """Compute centre of mass"""
+        """
+        Computes the centre of mass
+        """
 
         return np.average(self.pos[:self.count], axis=0, weights=self.mass[:self.count])
 
 
+
     def recentre(self):
-        """Re-centre the simulation such that the centre-of-mass of the assembly
-        is located at the origin (0,0,0)"""
+        """
+        Re-centres the simulation such that the centre-of-mass of the assembly
+        is located at the origin (0,0,0)
+        """
 
         self.pos -= self.com()
+
 
 
     def move(self, vector):
@@ -200,34 +236,51 @@ class Simulation:
         self.pos += vector
 
 
+
     def gyration(self):
-        """Returns the radius of gyration: the RMS of the monomer distances from the
-        centre of mass of the aggregate"""
+        """
+        Returns the radius of gyration: the RMS of the monomer distances from the
+        centre of mass of the aggregate.
+        """
 
         return np.sqrt(np.square(self.pos[:self.count]-self.com()).sum()/self.count)
 
+
+
     def char_rad(self):
-        """Calculates the characteristic radius:
-        a_c = sqrt(5/3) * R_g"""
+        """
+        Calculates the characteristic radius: a_c = sqrt(5/3) * R_g
+        """
 
         return np.sqrt(5./3.) * self.gyration()
 
+
+
     def porosity(self):
-        """Calculates porosity as 1 - vol / vol_gyration"""
+        """
+        Calculates porosity as 1 - vol / vol_gyration
+        """
 
         return (1. - ( (self.mass[:self.count].sum()) / ((4./3.)*np.pi*self.gyration()**3.) ) )
 
 
-    def fractal_scaling(self, prefactor=1.27):
 
-        # N = k * (Rg/a)**Df
+    def fractal_scaling(self, prefactor=1.27):
+        """Calculates the fractal dimension according to the scaling relation:
+        N = k * (Rg/a)**Df
+        The value of k, the fratcal pre-factor, can be set with prefactor=
+        """
+
         return np.log(self.count/prefactor)/np.log(self.gyration()/self.radius.min())
 
 
-    def fractal_mass_radius(self, num_pts=100, show=False):
-        """Calculate the fractal dimension of the domain using the relation:
 
-        m(r) prop. r**D_m"""
+    def fractal_mass_radius(self, num_pts=100, show=False):
+        """
+        Calculate the fractal dimension of the domain using the relation:
+
+        m(r) prop. r**D_m
+        """
 
         r = np.linalg.norm(self.pos, axis=1)
         start = self.radius.min()
@@ -261,7 +314,9 @@ class Simulation:
 
 
     def fractal_box_count(self, num_grids=100):
-        """Calculate the fractal dimension of the domain using the cube-counting method"""
+        """
+        Calculate the fractal dimension of the domain using the cube-counting method.
+        """
 
         # need to determine if a square contains any of a sphere...
         # first use a bounding box method to filter the domain
@@ -293,16 +348,27 @@ class Simulation:
        #    end
        # end
 
+
+
     def to_csv(self, filename):
-        """Write key simulation variables (id, position and radius) to a CSV file"""
+        """
+        Write key simulation variables (id, position and radius) to a CSV file
+        """
+
         headertxt = 'id, x, y, z, radius'
         np.savetxt(filename, np.hstack( (self.id[:,np.newaxis], self.pos, self.radius[:,np.newaxis]) ),
             delimiter=",", header=headertxt)
 
-    def from_csv(self, filename):
-        """Initialise simulation based on a file containing particle ID, position and radius.
+        return
 
-        Note that particles with the same ID will be treated as members of an aggregate"""
+
+
+    def from_csv(self, filename):
+        """
+        Initialise simulation based on a file containing particle ID, position and radius.
+
+        Note that particles with the same ID will be treated as members of an aggregate.
+        """
 
         simdata = np.genfromtxt(filename, comments='#', delimiter=',')
         self.id = simdata[:,0].astype(np.int)
@@ -312,5 +378,152 @@ class Simulation:
         self.count = len(self.id)
         self.next_id = self.id.max()+1
         self.agg_count = len(np.unique(self.id))
+
+        return
+
+
+
+    def to_vtk(self, filename):
+        """
+        Writes the simulation domain to a VTK file. Note that evtk is required!
+        """
+
+        from evtk.hl import pointsToVTK
+
+        x = np.ascontiguousarray(self.pos[:,0])
+        y = np.ascontiguousarray(self.pos[:,1])
+        z = np.ascontiguousarray(self.pos[:,2])
+
+        pointsToVTK(filename, x, y, z,
+            data = {"id" : self.id, "radius" : self.radius, "mass": self.mass})
+
+        return
+
+
+
+    def to_liggghts(self, filename, density=1000.):
+        """
+        Write to a LIGGGHTS data file, suitable to be read into a simulation.
+        """
+
+        # Save to a LAMMPS/LIGGGHTS data file, compatible with the read_data function
+        #
+        # Output format needs to be:
+        # 42 atoms
+        #
+        # 1 atom types
+        #
+        # -0.155000000000000 0.155000000000000 xlo xhi
+        # -0.155000000000000 0.155000000000000 ylo yhi
+        # -0.150000000000000 1.200000000000000 zlo zhi
+        #
+        # Atoms
+        #
+        # 1 1 0.01952820 0.14099100 1.10066000 0.01073252 1000.0 1
+        # 2 1 0.01811800 0.14345470 1.10433955 0.00536626 1000.0 1
+        #
+        # atom-ID atom-type x y z diameter density molecule-ID
+        #
+        # etc.
+
+        liggghts_file = open('data.' + filename, 'w')
+        liggghts_file.write('# LAMMPS data file\n\n')
+
+        # TODO: update for aggregates once that code is in place
+
+        liggghts_file.write(str(self.count) + ' atoms \n\n')
+        liggghts_file.write('1 atom types\n\n')
+
+        (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
+
+        liggghts_file.write(str(xmin) + ' ' + str(xmax) + ' xlo xhi\n')
+        liggghts_file.write(str(ymin) + ' ' + str(ymax) + ' ylo yhi\n')
+        liggghts_file.write(str(zmin) + ' ' + str(zmax) + ' zlo zhi\n\n')
+
+        liggghts_file.write('Atoms\n\n')
+
+        for idx in range(self.count):
+
+            liggghts_file.write(str(self.id[idx]) + ' ' + str(1) + ' ' + str(2.*self.radius[idx]) + ' ' +
+                str(density) + ' ' + str(self.pos[idx,0]) + ' ' + str(self.pos[idx,1]) + ' ' + str(self.pos[idx,2]) + '\n')
+
+        liggghts_file.close()
+
+        return
+
+
+
+    def to_afm(self, xpix=256, ypix=256):
+        """
+        Assuming an infinitely sharp tip, this routine samples the simulation domain
+        (up to the bounding box) at regular points in the XY plane, defined by the
+        number of x and y pixels given by xpix and ypix.
+
+        A 2D height field is returned which gives a simulated AFM image at the given
+        resolution. Note that the 'substrate' is assumed simply to be the lowest
+        point in the aggregate and values with no particle will be set to zero there."""
+
+        afm_image = np.zeros( (xpix,ypix), dtype=np.float )
+
+        (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
+
+        height = zmax + self.radius.max()
+
+        xs = np.linspace(xmin, xmax, xpix)
+        ys = np.linspace(ymin, ymax, ypix)
+
+        for y_idx in range(ypix):
+            for x_idx in range(xpix):
+                pcle_id, intersect = self.intersect( (xs[x_idx], ys[y_idx], height), (0.,0.,-1.), closest=True )
+                if intersect is None:
+                    afm_image[y_idx,x_idx] = zmin
+                else:
+                    afm_image[y_idx,x_idx] = intersect[2]
+
+        afm_image -= afm_image.min()
+
+        return afm_image
+
+
+    def to_gsf(self, filename, xpix=256, ypix=256):
+        """
+        Generates an AFM height field using to_afm() and writes to a Gwyddion simple
+        field file (.gsf). The full file description can be found at:
+
+        http://gwyddion.net/documentation/user-guide-en/gsf.html
+
+        """
+
+        import os, struct
+
+        (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
+        afm_image = self.to_afm(xpix=xpix, ypix=ypix)
+
+        if os.path.splitext(filename) != '.gsf':
+            filename += '.gsf'
+
+        gsf_file = open(filename, 'w')
+        gsf_file.write('Gwyddion Simple Field 1.0\n')
+        gsf_file.write('XRes = %d\n' % xpix)
+        gsf_file.write('YRes = %d\n' % ypix)
+        gsf_file.write('XReal = %5.3f\n' % (xmax-xmin))
+        gsf_file.write('YReal = %5.3f\n' % (ymax-ymin))
+
+        gsf_file.close()
+
+        # pad to the nearest 4-byte boundary with NULLs
+        filesize = os.path.getsize(filename)
+        padding = filesize % 4
+        pad = struct.Struct('%dx' % padding)
+
+        gsf_file = open(filename, 'ab')
+        gsf_file.write(pad.pack())
+
+        # Data values are stored as IEEE 32bit single-precision floating point numbers,
+        # in little-endian (LSB, or Intel) byte order. Values are stored by row, from top to bottom,
+        # and in each row from left to right.
+        s = struct.pack('<%df' % (xpix*ypix), *np.ravel(afm_image).tolist())
+        gsf_file.write(s)
+        gsf_file.close()
 
         return

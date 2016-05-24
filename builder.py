@@ -17,7 +17,8 @@ debug = False
 
 
 def build_bcca(num_pcles=128, radius=1., store_aggs=False, use_stored=False, agg_path='.'):
-    """Build a cluster-cluster agglomerate particle. This works by building two
+    """
+    Build a cluster-cluster agglomerate particle. This works by building two
     identical mass aggregates with m particles and allowing them to stick randomly
     to produce a 2m monomer aggregate. Two of these aggregates are then joined,
     and so on.
@@ -27,7 +28,8 @@ def build_bcca(num_pcles=128, radius=1., store_aggs=False, use_stored=False, agg
     To speed up subsequent runs, store_aggs=True will store each
     generation of aggregate to a file. If use_stored=True a random one of these
     files will be loaded. If insufficient files are available, new aggregates
-    will be generated. All files are saved/loaded to/from agg_path (default=.)"""
+    will be generated. All files are saved/loaded to/from agg_path (default=.)
+    """
 
     num_pcles = int(num_pcles)
     if not (num_pcles != 0 and ((num_pcles & (num_pcles - 1)) == 0)):
@@ -65,11 +67,13 @@ def build_bcca(num_pcles=128, radius=1., store_aggs=False, use_stored=False, agg
 
 
 def build_bpca(num_pcles=128, radius=1., overlap=None):
-    """Build a simple ballistic particle cluster aggregate by generating particle and
+    """
+    Build a simple ballistic particle cluster aggregate by generating particle and
      allowing it to stick where it first intersects another particle.
 
      If overlap= is set to a value between 0 and 1, monomers will be allowed to overlap
-     by 0.5*overlap*(radius1+radius2)"""
+     by 0.5*overlap*(radius1+radius2).
+     """
 
      # TODO: add various radius distribution options (i.e. polydisperse)
 
@@ -118,8 +122,10 @@ def build_bpca(num_pcles=128, radius=1., overlap=None):
 
 
 def test_random_sphere(num=1000, scale=1.):
-    """Test routine to ensure that the random point-on-a-sphere
-    generator works correctly"""
+    """
+    Test routine to ensure that the random point-on-a-sphere
+    generator works correctly.
+    """
 
     points = []
     [points.append(scale*random_sphere()) for i in range(num)]
@@ -127,7 +133,9 @@ def test_random_sphere(num=1000, scale=1.):
 
 
 def random_sphere():
-    """Returns a random point on a unit sphere"""
+    """
+    Returns a random point on a unit sphere.
+    """
 
     import random, math
 
@@ -138,62 +146,3 @@ def random_sphere():
     z = u
 
     return np.array([x,y,z])
-
-
-
-
-
-def sphere_line(centre, radius, line_start, line_end):
-    """Checks for line-sphere intersection (zero, one or two). Returns
-    coordinates of the intersects, or None for each of the two possible
-    points"""
-
-    def square(f):
-        return f * f
-    from math import sqrt
-
-    p1 = p2 = None
-
-    a = square(line_end[0] - line_start[0]) + square(line_end[1] - line_start[1]) + square(line_end[2] - line_start[2])
-
-    b = 2.0 * ((line_end[0] - line_start[0]) * (line_start[0] - centre[0]) +
-               (line_end[1] - line_start[1]) * (line_start[1] - centre[1]) +
-               (line_end[2] - line_start[2]) * (line_start[2] - centre[2]))
-
-    c = (square(centre[0]) + square(centre[1]) + square(centre[2]) + square(line_start[0]) +
-            square(line_start[1]) + square(line_start[2]) -
-            2.0 * (centre[0] * line_start[0] + centre[1] * line_start[1] + centre[2] * line_start[2]) - square(radius))
-
-    i = b * b - 4.0 * a * c
-
-    if i < 0.0:
-        pass  # no intersections
-    elif i == 0.0:
-        # one intersection
-        p[0] = 1.0
-
-        mu = -b / (2.0 * a)
-        p1 = (line_start[0] + mu * (line_end[0] - line_start[0]),
-              line_start[1] + mu * (line_end[1] - line_start[1]),
-              line_start[2] + mu * (line_end[2] - line_start[2]),
-              )
-
-    elif i > 0.0:
-        # first intersection
-        mu = (-b + sqrt(i)) / (2.0 * a)
-        p1 = (line_start[0] + mu * (line_end[0] - line_start[0]),
-              line_start[1] + mu * (line_end[1] - line_start[1]),
-              line_start[2] + mu * (line_end[2] - line_start[2]),
-              )
-
-        # second intersection
-        mu = (-b - sqrt(i)) / (2.0 * a)
-        p2 = (line_start[0] + mu * (line_end[0] - line_start[0]),
-              line_start[1] + mu * (line_end[1] - line_start[1]),
-              line_start[2] + mu * (line_end[2] - line_start[2]),
-              )
-
-    p1 = np.array(p1) if p1 is not None else p1
-    p2 = np.array(p2) if p2 is not None else p2
-
-    return p1, p2
