@@ -20,6 +20,6 @@ The returned `simulation` object has a variety of methods to calculate aggregate
 * radius of gyration
 * characteristic radius
 * porosity
-* fractal dimension
+* fractal dimension (various methods)
 
 
