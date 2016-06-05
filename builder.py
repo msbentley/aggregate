@@ -50,13 +50,13 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
 
     # first run, generate 2 monomer BPCA aggregates
     agg_list = []
-    [agg_list.append(build_bpca(num_pcles=2, radius=radius)) for i in range(num_pcles/2)]
+    [agg_list.append(build_bpca(num_pcles=2, radius=radius, output=False)) for i in range(num_pcles/2)]
     [agg.recentre() for agg in agg_list]
 
     for idx, gen in enumerate(range(num_gens-1,0,-1)):
 
         num_aggs = 2**gen
-        print('INFO: Building generation %d with %d aggregates' % (idx+1,num_aggs))
+        print('INFO: Building generation %d with %d aggregates of %d monomers' % (idx+1,num_aggs,2**(idx+1)))
 
         next_list = []
         for agg_idx in range(0,num_aggs,2):
@@ -90,6 +90,7 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
                     if not success: continue
 
                     sim.add_agg(agg2)
+                    sim.recentre()
                     next_list.append(sim)
 
         agg_list = next_list
