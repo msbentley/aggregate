@@ -96,8 +96,10 @@ class Simulation:
 
     def add(self, pos, radius, check=False):
         """
-        Add a particle to the simulation. If check=True the distance between the proposed
-        particle and each other is checked so see if they overlap. If so, False is returned.
+        Add a particle or aggregate  to the simulation.
+
+        If check=True the distance between the proposed particle and each other
+        is checked so see if they overlap. If so, False is returned.
         """
 
         if check:
@@ -122,25 +124,33 @@ class Simulation:
 
 
 
-    def add_agg(self, pos, radius, check=False):
+    def add_agg(self, sim, check=False):
         """
         Add an aggregate particle to the simulation. If check=True the distance between the proposed
         particle and each other is checked so see if they overlap. If so, False is returned.
         """
 
+        # if not isinstance(sim, Simulation):
+        #     print('ERROR: a simulation instance must be passed to add_agg()')
+        #     sldkafjldakjg
+        #     return None
+
         if check:
+
+            pass # TODO
+
             if not self.check(pos, radius):
                 return False
 
         # TODO
 
-        self.pos[self.count] = np.array(pos)
-        self.radius[self.count] = radius
-        self.mass[self.count] = (4./3.)*np.pi*radius**3.
+        num_pcles = sim.count
 
-        self.count += 1
-        self.id[self.count-1] = self.next_id
-        self.next_id += 1
+        self.pos[self.count:self.count+num_pcles] = sim.pos[0:sim.count]
+        self.radius[self.count:self.count+num_pcles] = sim.radius[0:sim.count]
+        self.mass[self.count:self.count+num_pcles] = (4./3.)*np.pi*sim.radius[0:sim.count]**3.
+        self.id[self.count:self.count+num_pcles] = self.id.max()+1+range(num_pcles)
+        self.count += num_pcles
 
         return True
 
@@ -148,13 +158,53 @@ class Simulation:
 
     def intersect(self, position, direction, closest=True):
         """
+        Wrapper for line_sphere() that detects if the position passed is for a
+        monomer or an aggregates and handles each case.
+        """
+
+        if len(position.shape)==2: # position is an array, i.e. an aggregate
+            # loop over each monomer in the passed aggregate and check if it
+            # intersects any of the monomers already in the domain
+
+            # TODO: find a better, vectorised way to do this!'
+
+            max_dist = 10000. # self.farthest()+self.radius.max()
+            sim_id = None
+            hits = None
+            monomer_pos = None
+
+            for pos in position:
+
+                ids, dist = self.line_sphere(pos, direction, closest=True, ret_dist=True)
+                if dist is not None:
+                    if dist < max_dist:
+                        max_dist = dist
+                        monomer_pos = pos
+                        sim_id = ids # id of the simulation agg
+
+            if sim_id is not None:
+                hit = monomer_pos + max_dist * direction # position of closest intersect
+                return sim_id, max_dist, hit
+
+        else:
+
+            ids, hits = self.line_sphere(position, direction, closest=closest, ret_dist=False)
+
+        return ids, hits, None
+
+
+    def line_sphere(self, position, direction, closest=True, ret_dist=False):
+        """
         Accepts a position and direction vector defining a line and determines which
         particles in the simulation intersect this line, and the locations of these
         intersections. If closest=True only the shortest (closest) intersect is
         returned, otherwise all values are given.
-        """
 
-        # see, for example, https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
+        If ret_dist=True then the distance from position to the hit will be returned,
+        rather than the coordinates of the hit itself.
+
+        See, for example, https://en.wikipedia.org/wiki/Line%E2%80%93sphere_intersection
+        """
 
         # calculate the discriminator using numpy arrays
         vector = position - self.pos[0:self.count]
@@ -181,9 +231,15 @@ class Simulation:
         hits = position + dist[:,np.newaxis] * direction
 
         if closest:
-            return ids[np.argmin(dist)], hits[np.argmin(dist)]
+            if ret_dist:
+                return ids[np.argmin(dist)], dist[np.argmin(dist)]
+            else:
+                return ids[np.argmin(dist)], hits[np.argmin(dist)]
         else:
-            return ids, hits
+            if ret_dist:
+                return ids, dist
+            else:
+                return ids, hits
 
 
 
@@ -194,11 +250,22 @@ class Simulation:
         False if not.
         """
 
-        if (cdist(np.array([pos]), self.pos[0:self.count+1])[0] < (radius + self.radius[0:self.count+1].max())).sum() > 0:
-            if self.debug: print('Cannot add particle here!')
-            return False
+        if len(pos.shape)==2: # passed an aggregate
+
+            if cdist(pos, self.pos[0:self.count]).min() < (radius.max() + self.radius[0:self.count].max()) > 0:
+                # TODO does not properly deal with polydisperse systems
+                if self.debug: print('Cannot add aggregate here!')
+                return False
+            else:
+                return True
+
         else:
-            return True
+
+            if (cdist(np.array([pos]), self.pos[0:self.count+1])[0] < (radius + self.radius[0:self.count+1].max())).sum() > 0:
+                if self.debug: print('Cannot add particle here!')
+                return False
+            else:
+                return True
 
 
 
@@ -271,7 +338,7 @@ class Simulation:
         The value of k, the fratcal pre-factor, can be set with prefactor=
         """
 
-        return np.log(self.count/prefactor)/np.log(self.gyration()/self.radius.min())
+        return np.log(self.count/prefactor)/np.log(self.gyration()/self.radius[0:self.count].min())
 
 
 
@@ -527,3 +594,78 @@ class Simulation:
         gsf_file.close()
 
         return
+
+
+
+    def rotate(self, vector, axis=0):
+        """
+        Rotates the entire simulation (typically an aggregate centred on
+        the origin) about the origin. Usually this is used to provide a
+        random orientation. Inputs are a unit vector and an axis (0-3=X/Y/Z).
+
+        A rotation matrix will be calculated between the specified axis and the
+        given vector, and this will be applied to the particles in the simulation.
+        """
+
+
+
+
+def R_2vect(R, vector_orig, vector_fin):
+    """Calculate the rotation matrix required to rotate from one vector to another.
+
+    Taken from: http://svn.gna.org/svn/relax/tags/1.3.4/maths_fns/rotation_matrix.py
+
+    For the rotation of one vector to another, there are an infinit series of rotation matrices
+    possible.  Due to axially symmetry, the rotation axis can be any vector lying in the symmetry
+    plane between the two vectors.  Hence the axis-angle convention will be used to construct the
+    matrix with the rotation axis defined as the cross product of the two vectors.  The rotation
+    angle is the arccosine of the dot product of the two unit vectors.
+
+    Given a unit vector parallel to the rotation axis, w = [x, y, z] and the rotation angle a,
+    the rotation matrix R is::
+
+              |  1 + (1-cos(a))*(x*x-1)   -z*sin(a)+(1-cos(a))*x*y   y*sin(a)+(1-cos(a))*x*z |
+        R  =  |  z*sin(a)+(1-cos(a))*x*y   1 + (1-cos(a))*(y*y-1)   -x*sin(a)+(1-cos(a))*y*z |
+              | -y*sin(a)+(1-cos(a))*x*z   x*sin(a)+(1-cos(a))*y*z   1 + (1-cos(a))*(z*z-1)  |
+
+
+    @param R:           The 3x3 rotation matrix to update.
+    @type R:            3x3 numpy array
+    @param vector_orig: The unrotated vector defined in the reference frame.
+    @type vector_orig:  numpy array, len 3
+    @param vector_fin:  The rotated vector defined in the reference frame.
+    @type vector_fin:   numpy array, len 3
+    """
+
+    # Convert the vectors to unit vectors.
+    vector_orig = vector_orig / norm(vector_orig)
+    vector_fin = vector_fin / norm(vector_fin)
+
+    # The rotation axis (normalised).
+    axis = cross(vector_orig, vector_fin)
+    axis_len = norm(axis)
+    if axis_len != 0.0:
+        axis = axis / axis_len
+
+    # Alias the axis coordinates.
+    x = axis[0]
+    y = axis[1]
+    z = axis[2]
+
+    # The rotation angle.
+    angle = acos(dot(vector_orig, vector_fin))
+
+    # Trig functions (only need to do this maths once!).
+    ca = cos(angle)
+    sa = sin(angle)
+
+    # Calculate the rotation matrix elements.
+    R[0,0] = 1.0 + (1.0 - ca)*(x**2 - 1.0)
+    R[0,1] = -z*sa + (1.0 - ca)*x*y
+    R[0,2] = y*sa + (1.0 - ca)*x*z
+    R[1,0] = z*sa+(1.0 - ca)*x*y
+    R[1,1] = 1.0 + (1.0 - ca)*(y**2 - 1.0)
+    R[1,2] = -x*sa+(1.0 - ca)*y*z
+    R[2,0] = -y*sa+(1.0 - ca)*x*z
+    R[2,1] = x*sa+(1.0 - ca)*y*z
+    R[2,2] = 1.0 + (1.0 - ca)*(z**2 - 1.0)

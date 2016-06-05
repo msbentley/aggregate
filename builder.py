@@ -16,7 +16,7 @@ import numpy as np
 debug = False
 
 
-def build_bcca(num_pcles=128, radius=1., store_aggs=False, use_stored=False, agg_path='.'):
+def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_stored=False, agg_path='.'):
     """
     Build a cluster-cluster agglomerate particle. This works by building two
     identical mass aggregates with m particles and allowing them to stick randomly
@@ -48,25 +48,57 @@ def build_bcca(num_pcles=128, radius=1., store_aggs=False, use_stored=False, agg
     # where <m> is the generation number (1=2 monomers, 2=4 monomers and so on)
     # and <id> is an incrementing ID (1=first file, etc.)
 
-    for generation in range(num_gens):
+    # first run, generate 2 monomer BPCA aggregates
+    agg_list = []
+    [agg_list.append(build_bpca(num_pcles=2, radius=radius)) for i in range(num_pcles/2)]
+    [agg.recentre() for agg in agg_list]
 
-        num_part = 2**generation
+    for idx, gen in enumerate(range(num_gens-1,0,-1)):
 
-        # to build this generation, we need two of the previous generation - check
-        # if we are loading these from files, and if there are enough - otherwise
-        # generate anew.
+        num_aggs = 2**gen
+        print('INFO: Building generation %d with %d aggregates' % (idx+1,num_aggs))
 
-        agg1 = self.build_bpca(num_pcles=2, radius=radius)
-        agg1.recentre()
-        agg2 = self.build_bpca(num_pcles=2, radius=radius)
-        vec = random_sphere() * max(agg1.farthest() * 2.0, radius *4.)
-        agg2.move(vec)
+        next_list = []
+        for agg_idx in range(0,num_aggs,2):
+            sim = Simulation(max_pcles=num_pcles)
+            agg1 = agg_list[agg_idx]
+            agg2 = agg_list[agg_idx+1]
+            sim.add_agg(agg1)
+            vec = random_sphere() * max(sim.farthest() * 10.0, radius *4.)
+            agg2.move(vec)
 
-    return
+            success = False
+            while not success:
+
+                second = random_sphere() * max(agg1.farthest() * 10.0, radius *4.)
+                direction = (second - vec)
+                direction = direction/np.linalg.norm(direction)
+
+                ids, dist, hit = sim.intersect(agg2.pos, direction, closest=True)
+
+                if hit is None:
+                    continue
+                else:
+                    agg2.move(direction*dist)
+
+                    # now need to shift to avoid any overlap - query the intersect between
+                    # two monomers that will be colliding
+                    agg2.move(hit-sim.pos[np.where(sim.id==ids)[0][0]])
+
+                    # check if there are any overlaps in the domain
+                    success = sim.check(agg2.pos, agg2.radius)
+                    if not success: continue
+
+                    sim.add_agg(agg2)
+                    next_list.append(sim)
+
+        agg_list = next_list
+
+    return next_list[0]
 
 
 
-def build_bpca(num_pcles=128, radius=1., overlap=None):
+def build_bpca(num_pcles=128, radius=1., overlap=None, output=True):
     """
     Build a simple ballistic particle cluster aggregate by generating particle and
      allowing it to stick where it first intersects another particle.
@@ -92,17 +124,17 @@ def build_bpca(num_pcles=128, radius=1., overlap=None):
         success = False
         while not success:
 
-            print('Generating particle %d of %d' % (n+2, num_pcles), end='\r')
+            if output: print('Generating particle %d of %d' % (n+2, num_pcles), end='\r')
 
             first = random_sphere() * max(sim.farthest() * 2.0, radius *4.)
             second = random_sphere() * max(sim.farthest() * 2.0, radius *4.)
             direction = (second - first)
             direction = direction/np.linalg.norm(direction)
-            ids, hit = sim.intersect(first, direction, closest=True)
+            ids, hit, nothing = sim.intersect(first, direction, closest=True)
             if hit is None: continue
 
             # shift the origin along the line from the particle centre to the intersect
-            new = hit + (hit-sim.pos[ids])
+            new = hit + (hit-sim.pos[np.where(sim.id==ids)[0][0]])
 
             # Add to the simulation, checking for overlap with existing partilces (returns False if overlap detected)
             success = sim.check(new, radius)
