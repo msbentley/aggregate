@@ -70,12 +70,110 @@ class Simulation:
         return (xmin, xmax), (ymin,ymax), (zmin, zmax)
 
 
+    def bb_aspect(self):
+        """
+        Returns the aspect ratio X:Y:Z of the bounding box.
+        """
 
-    def show(self, using='maya'):
+        (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
+        xsize = xmax-xmin
+        ysize = ymax-ymin
+        zsize = zmax-zmin
+
+        return (xsize, ysize, zsize)/min(xsize, ysize, zsize)
+
+
+    def fit_ellipse(self, tolerance=0.01):
+        """ Find the minimum volume ellipsoid which holds all the points
+
+        Based on work by Nima Moshtagh
+        http://www.mathworks.com/matlabcentral/fileexchange/9542
+        and also by looking at:
+        http://cctbx.sourceforge.net/current/python/scitbx.math.minimum_covering_ellipsoid.html
+        Which is based on the first reference anyway!
+
+        Code adapted from: https://github.com/minillinim/ellipsoid/blob/master/ellipsoid.py
+
+        Returns:
+        (center, radii, rotation)
+
+        """
+
+        from numpy import linalg
+
+        P = self.pos
+
+        (N, d) = np.shape(P)
+        d = float(d)
+
+        # Q will be our working array
+        Q = np.vstack([np.copy(P.T), np.ones(N)])
+        QT = Q.T
+
+        # initializations
+        err = 1.0 + tolerance
+        u = (1.0 / N) * np.ones(N)
+
+        # Khachiyan Algorithm
+        while err > tolerance:
+            V = np.dot(Q, np.dot(np.diag(u), QT))
+            M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
+            j = np.argmax(M)
+            maximum = M[j]
+            step_size = (maximum - d - 1.0) / ((d + 1.0) * (maximum - 1.0))
+            new_u = (1.0 - step_size) * u
+            new_u[j] += step_size
+            err = np.linalg.norm(new_u - u)
+            u = new_u
+
+        # center of the ellipse
+        center = np.dot(P.T, u)
+
+        # the A matrix for the ellipse
+        A = linalg.inv(
+                       np.dot(P.T, np.dot(np.diag(u), P)) -
+                       np.array([[a * b for b in center] for a in center])
+                       ) / d
+
+        # Get the values we'd like to return
+        U, s, rotation = linalg.svd(A)
+        radii = 1.0/np.sqrt(s)
+
+        return (center, radii, rotation)
+
+
+
+
+    def elongation(self):
+
+        (center, radii, rotation) = self.fit_ellipse()
+        return max(radii/min(radii))
+
+
+
+
+    def show(self, using='maya', fit_ellipse=False):
         """
         A simple scatter-plot to represent the aggregate - either using mpl
         or mayavi
         """
+
+        if fit_ellipse:
+
+            (center, radii, rotation) = self.fit_ellipse()
+
+            u = np.linspace(0.0, 2.0 * np.pi, 100)
+            v = np.linspace(0.0, np.pi, 100)
+
+            # cartesian coordinates that correspond to the spherical angles:
+            x = radii[0] * np.outer(np.cos(u), np.sin(v))
+            y = radii[1] * np.outer(np.sin(u), np.sin(v))
+            z = radii[2] * np.outer(np.ones_like(u), np.cos(v))
+            # rotate accordingly
+            for i in range(len(x)):
+                for j in range(len(x)):
+                    [x[i,j],y[i,j],z[i,j]] = np.dot([x[i,j],y[i,j],z[i,j]], rotation) + center
+
 
         if using=='mpl':
 
@@ -83,12 +181,20 @@ class Simulation:
             from mpl_toolkits.mplot3d import Axes3D
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
+            # ax.set_aspect('equal')
             ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
+
+            if fit_ellipse:
+                ax.plot_wireframe(x, y, z,  rstride=4, cstride=4, color='k', alpha=0.2)
             plt.show()
 
         elif using=='maya':
             from mayavi.mlab import points3d
             points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
+
+            if fit_ellipse:
+                from mayavi.mlab import mesh
+                mesh(x,y,z, opacity=0.25, color=(1,1,1))
 
         return
 
@@ -162,13 +268,16 @@ class Simulation:
         monomer or an aggregates and handles each case.
         """
 
+        if type(position)==tuple:
+            position = np.array(position)
+
         if len(position.shape)==2: # position is an array, i.e. an aggregate
             # loop over each monomer in the passed aggregate and check if it
             # intersects any of the monomers already in the domain
 
             # TODO: find a better, vectorised way to do this!'
 
-            max_dist = 10000. # self.farthest()+self.radius.max()
+            max_dist = 10000. # TODO calculate a sensible value here
             sim_id = None
             hits = None
             monomer_pos = None
@@ -185,12 +294,14 @@ class Simulation:
             if sim_id is not None:
                 hit = monomer_pos + max_dist * direction # position of closest intersect
                 return sim_id, max_dist, hit
+            else:
+                return None, None, None
 
         else:
 
             ids, hits = self.line_sphere(position, direction, closest=closest, ret_dist=False)
 
-        return ids, hits, None
+        return ids, hits
 
 
     def line_sphere(self, position, direction, closest=True, ret_dist=False):
@@ -518,6 +629,43 @@ class Simulation:
 
         return
 
+
+    def projection(self, xpix=512, ypix=512, vector=(0.,0.,-1.), show=False, png=None):
+        """
+        Produces a binary projection of the simulation with the number of
+        pixels specified by xpix and ypix along the direction given by
+        vector.
+
+        If png= is set to a filename, a 2D graphic will be output.
+        If show=True the image will be displayed.
+        """
+
+        binary_image = np.zeros( (xpix,ypix), dtype=bool )
+        farthest = self.farthest() + 2.*self.radius.max()
+
+        xs = np.linspace(-farthest, farthest, xpix)
+        ys = np.linspace(-farthest, farthest, ypix)
+
+        for y_idx in range(ypix):
+            for x_idx in range(xpix):
+                # TODO calculate position of grid points normal to the specified vector
+                pcle_id, intersect = self.intersect( (xs[x_idx], ys[y_idx], farthest), vector, closest=True )
+                if intersect is not None:
+                    binary_image[y_idx,x_idx] = True
+
+        if png is not None or show:
+
+            import matplotlib.pyplot as plt
+            fig, ax = plt.subplots()
+            ax.imshow(binary_image, cmap=plt.cm.binary, extent=[-farthest, farthest, -farthest, farthest])
+
+            if png is not None:
+                fig.savefig(png)
+
+            if show:
+                plt.show()
+
+        return binary_image
 
 
     def to_afm(self, xpix=256, ypix=256):

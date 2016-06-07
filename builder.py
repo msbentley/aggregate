@@ -131,7 +131,7 @@ def build_bpca(num_pcles=128, radius=1., overlap=None, output=True):
             second = random_sphere() * max(sim.farthest() * 2.0, radius *4.)
             direction = (second - first)
             direction = direction/np.linalg.norm(direction)
-            ids, hit, nothing = sim.intersect(first, direction, closest=True)
+            ids, hit = sim.intersect(first, direction, closest=True)
             if hit is None: continue
 
             # shift the origin along the line from the particle centre to the intersect
