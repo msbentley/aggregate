@@ -41,6 +41,11 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
         print('ERROR: radius must be a positive value')
         return None
 
+    if overlap is not None:
+        if (overlap<0.) or (overlap>1.):
+            print('ERROR: overlap must be either None, or 0<overlap<1')
+            return None
+
     num_gens = int(np.log2(num_pcles))
 
     # Generation files are stored as simple CSVs with the filename convention:
@@ -50,7 +55,7 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
 
     # first run, generate 2 monomer BPCA aggregates
     agg_list = []
-    [agg_list.append(build_bpca(num_pcles=2, radius=radius, output=False)) for i in range(num_pcles/2)]
+    [agg_list.append(build_bpca(num_pcles=2, radius=radius, output=False, overlap=overlap)) for i in range(num_pcles/2)]
     [agg.recentre() for agg in agg_list]
 
     for idx, gen in enumerate(range(num_gens-1,0,-1)):
@@ -88,6 +93,10 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
                     # check if there are any overlaps in the domain
                     success = sim.check(agg2.pos, agg2.radius)
                     if not success: continue
+
+                    # if requested, move the monomer back an amount
+                    if overlap is not None: # TODO: check this!
+                        agg2.move( (sim.pos[np.where(sim.id==ids)[0][0]]-hit)*(overlap) )
 
                     sim.add_agg(agg2)
                     sim.recentre()
