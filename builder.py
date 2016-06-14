@@ -16,7 +16,7 @@ import numpy as np
 debug = False
 
 
-def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_stored=False, agg_path='.'):
+def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_stored=False, agg_path='.', constrain_dir=True):
     """
     Build a cluster-cluster agglomerate particle. This works by building two
     identical mass aggregates with m particles and allowing them to stick randomly
@@ -69,6 +69,7 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
             agg1 = agg_list[agg_idx]
             agg2 = agg_list[agg_idx+1]
             sim.add_agg(agg1)
+            # TODO - calculate the optimum value instead of 10 here!
             vec = random_sphere() * max(sim.farthest() * 10.0, radius *4.)
             agg2.move(vec)
 
@@ -76,9 +77,13 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
             while not success:
 
                 second = random_sphere() * max(agg1.farthest() * 10.0, radius *4.)
-                direction = (second - vec)
-                direction = direction/np.linalg.norm(direction)
 
+                if constrain_dir:
+                    direction = (second - vec)
+                else:
+                    direction = second + random_sphere()
+
+                direction = direction/np.linalg.norm(direction)
                 ids, dist, hit = sim.intersect(agg2.pos, direction, closest=True)
 
                 if hit is None:
@@ -95,7 +100,7 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
                     if not success: continue
 
                     # if requested, move the monomer back an amount
-                    if overlap is not None: # TODO: check this!
+                    if overlap is not None:
                         agg2.move( (sim.pos[np.where(sim.id==ids)[0][0]]-hit)*(overlap) )
 
                     sim.add_agg(agg2)
