@@ -18,7 +18,7 @@ class Simulation:
     overlaps etc. It also calculates basic properties of particle collections within the domain.
     """
 
-    def __init__(self, max_pcles=1000, filename=None, debug=False):
+    def __init__(self, max_pcles=1000, filename=None, density=None, debug=False):
         """
         Initialise the simulation. The key parameter here is the maximum number of particles,
         in order to pre-allocate array space.
@@ -32,12 +32,14 @@ class Simulation:
         if (max_pcles is None) and (filename is None):
             print('WARNING: simulation object created, but no size given - use max_pcles or sim.from_csv')
         elif filename is not None:
-            self.from_csv(filename)
+            self.from_csv(filename, density=density)
         else:
             self.pos = np.zeros( (max_pcles, 3 ), dtype=np.float )
             self.id = np.zeros( max_pcles, dtype=np.int )
             self.radius =  np.zeros( max_pcles, dtype=np.float )
+            self.volume = np.zeros( max_pcles, dtype=np.float )
             self.mass = np.zeros( max_pcles, dtype=np.float )
+            self.density = np.zeros( max_pcles, dtype=np.float )
             self.count = 0
             self.agg_count = 0
             self.next_id = 0
@@ -189,20 +191,20 @@ class Simulation:
             plt.show()
 
         elif using=='maya':
-            from mayavi.mlab import points3d
-            points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
+            import mayavi.mlab as mlab
+            fig = mlab.figure(bgcolor=(1, 1, 1), fgcolor=(0, 0, 0))
+            mlab.points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
 
             if fit_ellipse:
-                from mayavi.mlab import mesh
-                mesh(x,y,z, opacity=0.25, color=(1,1,1))
+                mlab.mesh(x,y,z, opacity=0.25, color=(1,1,1))
 
         return
 
 
 
-    def add(self, pos, radius, check=False):
+    def add(self, pos, radius, density=1., check=False):
         """
-        Add a particle or aggregate  to the simulation.
+        Add a particle to the simulation.
 
         If check=True the distance between the proposed particle and each other
         is checked so see if they overlap. If so, False is returned.
@@ -220,7 +222,9 @@ class Simulation:
 
         self.pos[self.count] = np.array(pos)
         self.radius[self.count] = radius
-        self.mass[self.count] = (4./3.)*np.pi*radius**3.
+        self.volume[self.count] = (4./3.)*np.pi*radius**3.
+        self.density[self.count] = density
+        self.mass[self.count] = self.volume[self.count] * density
 
         self.count += 1
         self.id[self.count-1] = self.next_id
@@ -236,11 +240,6 @@ class Simulation:
         particle and each other is checked so see if they overlap. If so, False is returned.
         """
 
-        # if not isinstance(sim, Simulation):
-        #     print('ERROR: a simulation instance must be passed to add_agg()')
-        #     sldkafjldakjg
-        #     return None
-
         if check:
 
             pass # TODO
@@ -254,7 +253,11 @@ class Simulation:
 
         self.pos[self.count:self.count+num_pcles] = sim.pos[0:sim.count]
         self.radius[self.count:self.count+num_pcles] = sim.radius[0:sim.count]
-        self.mass[self.count:self.count+num_pcles] = (4./3.)*np.pi*sim.radius[0:sim.count]**3.
+        self.density[self.count:self.count+num_pcles] = sim.density[0:sim.count]
+        self.volume[self.count:self.count+num_pcles] = (4./3.)*np.pi*sim.radius[0:sim.count]**3.
+        self.mass[self.count:self.count+num_pcles] = \
+            self.volume[self.count:self.count+num_pcles] * self.density[self.count:self.count+num_pcles]
+
         self.id[self.count:self.count+num_pcles] = self.id.max()+1+range(num_pcles)
         self.count += num_pcles
 
@@ -439,8 +442,15 @@ class Simulation:
         Calculates porosity as 1 - vol / vol_gyration
         """
 
-        return (1. - ( (self.mass[:self.count].sum()) / ((4./3.)*np.pi*self.gyration()**3.) ) )
+        return (1. - ( (self.volume[:self.count].sum()) / ((4./3.)*np.pi*self.gyration()**3.) ) )
 
+
+    def bulk_density(self):
+        """
+        Calculates density as (mass of monomers)/(volume of gyration)
+        """
+
+        return (self.mass[:self.count].sum() / ((4./3.)*np.pi*self.gyration()**3.) )
 
 
     def fractal_scaling(self, prefactor=1.27):
@@ -541,7 +551,7 @@ class Simulation:
 
 
 
-    def from_csv(self, filename):
+    def from_csv(self, filename, density=None):
         """
         Initialise simulation based on a file containing particle ID, position and radius.
 
@@ -552,7 +562,12 @@ class Simulation:
         self.id = simdata[:,0].astype(np.int)
         self.pos = simdata[:,1:4]
         self.radius = simdata[:,4]
-        self.mass = (4./3.)*np.pi*self.radius**3.
+        if density is None:
+            self.density = simdata[:,5]
+        else:
+            self.density = np.ones_like(self.id, dtype=float)
+        self.volume = (4./3.)*np.pi*self.radius**3.
+        self.mass = self.volume * self.density
         self.count = len(self.id)
         self.next_id = self.id.max()+1
         self.agg_count = len(np.unique(self.id))
@@ -568,12 +583,19 @@ class Simulation:
 
         from evtk.hl import pointsToVTK
 
-        x = np.ascontiguousarray(self.pos[:,0])
-        y = np.ascontiguousarray(self.pos[:,1])
-        z = np.ascontiguousarray(self.pos[:,2])
+        # x = np.ascontiguousarray(self.pos[:,0])
+        # y = np.ascontiguousarray(self.pos[:,1])
+        # z = np.ascontiguousarray(self.pos[:,2])
+
+        x = np.asfortranarray(self.pos[:,0])
+        y = np.asfortranarray(self.pos[:,1])
+        z = np.asfortranarray(self.pos[:,2])
+        radius = np.asfortranarray(self.radius)
+        mass = np.asfortranarray(self.mass)
+        id = np.asfortranarray(self.id)
 
         pointsToVTK(filename, x, y, z,
-            data = {"id" : self.id, "radius" : self.radius, "mass": self.mass})
+            data = {"id" : id, "radius" : radius, "mass": mass})
 
         return
 
@@ -646,9 +668,13 @@ class Simulation:
         xs = np.linspace(-farthest, farthest, xpix)
         ys = np.linspace(-farthest, farthest, ypix)
 
+        # TODO select out points that are in proxity to pixel projection
+
+        # TODO: rotate points (about origin) such that the normal of the plane
+        # matches vector
+
         for y_idx in range(ypix):
             for x_idx in range(xpix):
-                # TODO calculate position of grid points normal to the specified vector
                 pcle_id, intersect = self.intersect( (xs[x_idx], ys[y_idx], farthest), vector, closest=True )
                 if intersect is not None:
                     binary_image[y_idx,x_idx] = True
