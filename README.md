@@ -1,5 +1,5 @@
 # aggregate
-Some python codes to generate various aggregate particles (e.g. ballistic particle cluster, and cluster-cluster). Note that this package is in a very early stage of development!
+Some python codes to generate various aggregate particles (e.g. ballistic particle cluster, and cluster-cluster) and characterise them in a variety of ways. Note that this is not done via dynamic simulation, but takes a ray-tracing approach.
 
 ## Installation
 
@@ -12,7 +12,10 @@ Note that currently simulation.show() can use either matplotlib or mayavi, but t
 
 ## Usage
 
-The `builder` package contains routines to build different aggregate types. Currently only BPCA is implemented using a ray-tracing routine to propose new monomer positions, which are then checked for overlap before being inserted into the simulation.
+The `builder` package contains routines to build different aggregate types. Currently BPCA (particle-cluster) and BCCA (cluster-cluster) aggregates are implemented. Future improvements will include:
+
+* polydisperse monomers (using a variety of distributions)
+* mixed models where either single monomers or clusters can be added
 
 The returned `simulation` object has a variety of methods to calculate aggregate properties, including:
 
@@ -20,6 +23,15 @@ The returned `simulation` object has a variety of methods to calculate aggregate
 * radius of gyration
 * characteristic radius
 * porosity
+* density
 * fractal dimension (various methods)
 
+There are also methods to display or write the simulation data to various formats:
 
+* `show` - displays the aggregate in 3D using `mayavi` or `matplotlib`
+* `projection` - calculates a 2D projection of the aggregate in a given direction
+* `to_csv` - output to a simple comma separated value file
+* `to_vtk' - output to a VTK file (uses [evtk](https://bitbucket.org/pauloh/pyevtk)!)
+* `to_afm` - calculates a simulated AFM image assuming an infinite tip
+* `to_gsf` - uses `to_afm` and outputs data to a [Gwyddion](http://gwyddion.net) simple file format
+* `to_liggghts` - writes a data file that can be read by [LIGGGHTS](http://www.cfdem.com/liggghts-open-source-discrete-element-method-particle-simulation-code)
