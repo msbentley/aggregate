@@ -152,9 +152,19 @@ class Simulation:
         return max(radii/min(radii))
 
 
+    def chull(self):
+        """
+        Calculates the convex hull (minimum volume) bounding the set of
+        sphere centres - DOES NOT ACCOUNT FOR RADII!
+        """
+
+        from scipy.spatial import ConvexHull
+        hull = ConvexHull(self.pos)
+        return hull
 
 
-    def show(self, using='maya', fit_ellipse=False):
+
+    def show(self, using='maya', fit_ellipse=False, show_hull=False):
         """
         A simple scatter-plot to represent the aggregate - either using mpl
         or mayavi
@@ -176,6 +186,11 @@ class Simulation:
                 for j in range(len(x)):
                     [x[i,j],y[i,j],z[i,j]] = np.dot([x[i,j],y[i,j],z[i,j]], rotation) + center
 
+        if show_hull:
+            hull = self.chull()
+            hull_x = hull.points[:,0]
+            hull_y = hull.points[:,1]
+            hull_z = hull.points[:,2]
 
         if using=='mpl':
 
@@ -197,6 +212,9 @@ class Simulation:
 
             if fit_ellipse:
                 mlab.mesh(x,y,z, opacity=0.25, color=(1,1,1))
+
+            if show_hull:
+                mlab.triangular_mesh(hull_x, hull_y, hull_z, hull.simplices, representation='wireframe',color=(1,1,1))
 
         return
 
@@ -437,7 +455,7 @@ class Simulation:
 
 
 
-    def porosity(self):
+    def porosity_gyro(self):
         """
         Calculates porosity as 1 - vol / vol_gyration
         """
@@ -445,12 +463,23 @@ class Simulation:
         return (1. - ( (self.volume[:self.count].sum()) / ((4./3.)*np.pi*self.gyration()**3.) ) )
 
 
-    def bulk_density(self):
+    def porosity_chull(self):
+
+        return (1. - ( (self.volume[:self.count].sum()) / self.chull().volume ) )
+
+
+
+    def density_gyro(self):
         """
         Calculates density as (mass of monomers)/(volume of gyration)
         """
 
         return (self.mass[:self.count].sum() / ((4./3.)*np.pi*self.gyration()**3.) )
+
+
+    def density_chull(self):
+
+        return (self.mass[:self.count].sum() / self.chull().volume)
 
 
     def fractal_scaling(self, prefactor=1.27):
