@@ -872,3 +872,33 @@ def R_2vect(R, vector_orig, vector_fin):
     R[2,0] = -y*sa+(1.0 - ca)*x*z
     R[2,1] = x*sa+(1.0 - ca)*y*z
     R[2,2] = 1.0 + (1.0 - ca)*(z**2 - 1.0)
+
+
+def SqDistPointSegment(a, b, c):
+    """Returns the square distance between point c and line segment ab."""
+
+    # // Returns the squared distance between point c and segment ab
+    ab = b - a
+    ac = c - a
+    bc = c - b
+    e = np.dot(ac, ab)
+
+    # Handle cases where c projects outside ab
+    if (e <= 0.):
+        return np.dot(ac, ac)
+    f = np.dot(ab, ab)
+    if (e >= f):
+        return np.dot(bc, bc)
+    # Handle cases where c projects onto ab
+    return np.dot(ac, ac) - e * e / f
+
+def TestSphereCapsule(sphere_pos, sphere_r, cyl_start, cyl_end, cyl_r):
+
+    # Compute (squared) distance between sphere center and capsule line segment
+    dist2 = SqDistPointSegment(cyl_start, cyl_end, sphere_pos)
+    # If (squared) distance smaller than (squared) sum of radii, they collide
+    radius = sphere_r + cyl_r
+    if dist2 <= radius * radius:
+        return True
+    else:
+        return False
