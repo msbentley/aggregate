@@ -681,7 +681,7 @@ class Simulation:
         return
 
 
-    def projection(self, xpix=512, ypix=512, vector=(0.,0.,-1.), show=False, png=None):
+    def projection(self, xpix=512, ypix=512, vector=None, show=False, png=None):
         """
         Produces a binary projection of the simulation with the number of
         pixels specified by xpix and ypix along the direction given by
@@ -701,10 +701,14 @@ class Simulation:
 
         # TODO: rotate points (about origin) such that the normal of the plane
         # matches vector
+        if vector is not None:
+            R = R_2vect( [0,0,1], vector)
+            old_pos = self.pos
+            self.pos = np.dot(self.pos, R)
 
         for y_idx in range(ypix):
             for x_idx in range(xpix):
-                pcle_id, intersect = self.intersect( (xs[x_idx], ys[y_idx], farthest), vector, closest=True )
+                pcle_id, intersect = self.intersect( (xs[x_idx], ys[y_idx], farthest), [0,0,-1], closest=True )
                 if intersect is not None:
                     binary_image[y_idx,x_idx] = True
 
@@ -719,6 +723,9 @@ class Simulation:
 
             if show:
                 plt.show()
+
+        if vector is not None:
+            self.pos = old_pos
 
         return binary_image
 
@@ -800,23 +807,40 @@ class Simulation:
 
 
 
-    def rotate(self, vector, axis=0):
+    def rotate(self, direction, angle):
         """
         Rotates the entire simulation (typically an aggregate centred on
         the origin) about the origin. Usually this is used to provide a
-        random orientation. Inputs are a unit vector and an axis (0-3=X/Y/Z).
+        random orientation. Inputs are a direction (vector) and an angle
+        (in degrees).
 
         A rotation matrix will be calculated between the specified axis and the
         given vector, and this will be applied to the particles in the simulation.
         """
 
+        # Rotation matrix code from here:
+        # https://mail.scipy.org/pipermail/numpy-discussion/2009-March/040806.html
+
+        d = np.array(direction, dtype=np.float64)
+        d /= np.linalg.norm(d)
+        angle = np.radians(angle)
+
+        eye = np.eye(3, dtype=np.float64)
+        ddt = np.outer(d, d)
+        skew = np.array( [[   0,   d[2], -d[1]],
+                          [-d[2],    0,   d[0]],
+                          [ d[1], -d[0],    0]], dtype=np.float64)
+
+        R = ddt + np.cos(angle) * (eye - ddt) + np.sin(angle) * skew
+        print R
+
+        self.pos = np.dot(self.pos, R)
+
+        return
 
 
-
-def R_2vect(R, vector_orig, vector_fin):
+def R_2vect(vector_orig, vector_fin):
     """Calculate the rotation matrix required to rotate from one vector to another.
-
-    Taken from: http://svn.gna.org/svn/relax/tags/1.3.4/maths_fns/rotation_matrix.py
 
     For the rotation of one vector to another, there are an infinit series of rotation matrices
     possible.  Due to axially symmetry, the rotation axis can be any vector lying in the symmetry
@@ -831,14 +855,21 @@ def R_2vect(R, vector_orig, vector_fin):
         R  =  |  z*sin(a)+(1-cos(a))*x*y   1 + (1-cos(a))*(y*y-1)   -x*sin(a)+(1-cos(a))*y*z |
               | -y*sin(a)+(1-cos(a))*x*z   x*sin(a)+(1-cos(a))*y*z   1 + (1-cos(a))*(z*z-1)  |
 
-
-    @param R:           The 3x3 rotation matrix to update.
-    @type R:            3x3 numpy array
     @param vector_orig: The unrotated vector defined in the reference frame.
     @type vector_orig:  numpy array, len 3
     @param vector_fin:  The rotated vector defined in the reference frame.
     @type vector_fin:   numpy array, len 3
+
+    As here: http://svn.gna.org/svn/relax/tags/1.3.4/maths_fns/rotation_matrix.py
     """
+
+    from numpy import matlib
+    from numpy import array, cross, dot
+    from numpy.linalg import norm
+    from math import acos, cos, sin
+
+    # R = matlib.zeros((3, 3))
+    R = np.zeros( (3,3) )
 
     # Convert the vectors to unit vectors.
     vector_orig = vector_orig / norm(vector_orig)
@@ -872,6 +903,9 @@ def R_2vect(R, vector_orig, vector_fin):
     R[2,0] = -y*sa+(1.0 - ca)*x*z
     R[2,1] = x*sa+(1.0 - ca)*y*z
     R[2,2] = 1.0 + (1.0 - ca)*(z**2 - 1.0)
+
+    return R
+
 
 
 def SqDistPointSegment(a, b, c):
