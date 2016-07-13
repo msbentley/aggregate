@@ -673,7 +673,7 @@ class Simulation:
 
         for idx in range(self.count):
 
-            liggghts_file.write(str(self.id[idx]) + ' ' + str(1) + ' ' + str(2.*self.radius[idx]) + ' ' +
+            liggghts_file.write(str(self.id[idx]+1) + ' ' + str(1) + ' ' + str(2.*self.radius[idx]) + ' ' +
                 str(density) + ' ' + str(self.pos[idx,0]) + ' ' + str(self.pos[idx,1]) + ' ' + str(self.pos[idx,2]) + '\n')
 
         liggghts_file.close()
