@@ -4,7 +4,13 @@ builder.py
 
 Mark S. Bentley (mark@lunartech.org), 2016
 
-Aggregate building module.
+Aggregate building module. This is the driver for building aggregates of
+spherical and spheroidal aggregates using different aggregation techniques.
+
+Currently available types are:
+
+    build_bcca() - Ballistic cluster-cluster aggregate
+    build_bpca() - Ballistic particle cluster aggregate
 
 """
 
@@ -16,7 +22,19 @@ import numpy as np
 debug = False
 
 
-def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_stored=False, agg_path='.', constrain_dir=True):
+# TODO: look at a "sphere cylinder" intersection to see if there is an easy way (akin
+# to the bounding box method for spheres) of checking for aggregate intersect and
+# discarding those that can't possibly hit!
+
+
+
+def build_hierarchical():
+
+    pass
+
+
+
+def build_bcca(num_pcles=1024, radius=0.5, overlap=None, store_aggs=False, use_stored=False, agg_path='.', constrain_dir=True):
     """
     Build a cluster-cluster agglomerate particle. This works by building two
     identical mass aggregates with m particles and allowing them to stick randomly
@@ -113,7 +131,7 @@ def build_bcca(num_pcles=128, radius=1., overlap=None, store_aggs=False, use_sto
 
 
 
-def build_bpca(num_pcles=128, radius=1., overlap=None, output=True):
+def build_bpca(num_pcles=1024, radius=0.5, overlap=None, output=True):
     """
     Build a simple ballistic particle cluster aggregate by generating particle and
      allowing it to stick where it first intersects another particle.
