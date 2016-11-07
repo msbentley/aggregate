@@ -4,10 +4,28 @@ simulation.py
 
 Mark S. Bentley (mark@lunartech.org), 2016
 
-Simulation environment module."""
+Simulation environment module for building aggregates. Currently this is non-
+dynamic and uses random vectors and line-sphere/line-spheroid intersects to
+build various aggreates types. The simulation environment tracks the per-
+particle position, mass, id etc. of the particle and also provides analytics
+such as the centre of mass, radius of gyration and fractal dimension.
+
+The key class is Simulation which provides methods that add monometers/
+aggregates to the simulation and operates on the simulation domain.
+
+Several help methods are provided at the top level.
+
+Requirements:
+
+- numpy
+- matplotlib - for show(using='mpl')
+- mayavi - for show(using='maya')
+- scipy - for Simulation.chull()
+- evtk - for Simulation.to_vtk()
+
+"""
 
 import numpy as np
-import matplotlib.pyplot as plt
 from scipy.spatial.distance import cdist
 
 
@@ -260,7 +278,8 @@ class Simulation:
 
         if check:
 
-            pass # TODO
+            # TODO - implement aggregate checking
+            pass
 
             if not self.check(pos, radius):
                 return False
@@ -295,8 +314,6 @@ class Simulation:
         if len(position.shape)==2: # position is an array, i.e. an aggregate
             # loop over each monomer in the passed aggregate and check if it
             # intersects any of the monomers already in the domain
-
-            # TODO: find a better, vectorised way to do this!'
 
             max_dist = 10000. # TODO calculate a sensible value here
             sim_id = None
@@ -566,6 +583,51 @@ class Simulation:
        # end
 
 
+    def to_xyz(self, filename, extended=False):
+        """
+        Writes monomer positions to a file using the simple XYZ format as here:
+
+        https://en.wikipedia.org/wiki/XYZ_file_format
+
+        If extended=True then the extended XYZ format is written:
+
+        https://libatoms.github.io/QUIP/io.html#module-ase.io.extxyz
+
+        (including radius, density etc.)
+        """
+
+        if not extended:
+
+            # <number of atoms>
+            # comment line
+            # <element> <X> <Y> <Z>
+            # ...
+
+            headertxt = '%d\n%s' % (len(self.pos), filename)
+            np.savetxt(filename, self.pos, delimiter=" ", header=headertxt, comments='')
+
+        else:
+
+            # <number of atoms>
+            # format definition
+            # <element> <X> <Y> <Z>
+            # ...
+
+            # format must contain Lattice and Properties
+            # Lattice="5.44 0.0 0.0 0.0 5.44 0.0 0.0 0.0 5.44" Properties=species:S:1:pos:R:3 Time=0.0
+
+            headertxt = '%d\n%s' % (len(self.pos), filename)
+            np.savetxt(filename, np.hstack( (self.id[:,np.newaxis], self.pos, self.radius[:,np.newaxis])) ,
+                delimiter=" ", header=headertxt, comments='')
+
+            # TODO: add formatted header and fmt statement to savetxt
+
+        return
+
+
+
+
+
 
     def to_csv(self, filename):
         """
@@ -630,9 +692,13 @@ class Simulation:
 
 
 
-    def to_liggghts(self, filename, density=1000.):
+    def to_liggghts(self, filename, density=1000., scale=None):
         """
         Write to a LIGGGHTS data file, suitable to be read into a simulation.
+
+        If scale= is set, the positions and radii are scaled by the given factor.
+        For example a sphere with radius 0.5 (arbitrary units) with scale=1.e6
+        will be written to the LIGGGHTS file as 0.5e-6.
         """
 
         # Save to a LAMMPS/LIGGGHTS data file, compatible with the read_data function
@@ -654,6 +720,8 @@ class Simulation:
         # atom-ID atom-type x y z diameter density molecule-ID
         #
         # etc.
+
+        # TODO: implementing scaling for scale= option
 
         liggghts_file = open('data.' + filename, 'w')
         liggghts_file.write('# LAMMPS data file\n\n')
