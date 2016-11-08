@@ -217,7 +217,7 @@ class Simulation:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             # ax.set_aspect('equal')
-            ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
+            p = ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
 
             if fit_ellipse:
                 ax.plot_wireframe(x, y, z,  rstride=4, cstride=4, color='k', alpha=0.2)
@@ -226,7 +226,7 @@ class Simulation:
         elif using=='maya':
             import mayavi.mlab as mlab
             fig = mlab.figure(bgcolor=(1, 1, 1), fgcolor=(0, 0, 0))
-            mlab.points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
+            h = mlab.points3d(self.pos[:,0], self.pos[:,1], self.pos[:,2], self.radius, scale_factor=2, resolution=16)
 
             if fit_ellipse:
                 mlab.mesh(x,y,z, opacity=0.25, color=(1,1,1))
@@ -234,7 +234,10 @@ class Simulation:
             if show_hull:
                 mlab.triangular_mesh(hull_x, hull_y, hull_z, hull.simplices, representation='wireframe',color=(1,1,1))
 
-        return
+        else:
+            print('ERROR: using= must ne either mpl or maya')
+
+        return h
 
 
 
