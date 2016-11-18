@@ -25,6 +25,7 @@ Requirements:
 
 """
 
+import os
 import numpy as np
 from scipy.spatial.distance import cdist
 
@@ -63,6 +64,27 @@ class Simulation:
             self.next_id = 0
 
         self.debug = debug
+
+
+    def update(self):
+        """Updates internally calculated parameters, such as mass and volume, after changes
+        to the simulation"""
+
+        self.volume = (4./3.) * np.pi * self.radius**3.
+        self.mass = self.volume * self.density
+
+        return
+
+
+    def scale(self, scale=1.):
+        """Applies a scale multiplier to all positions and radii. Mass, volume etc.
+        are also updated accordingly"""
+
+        self.pos *= scale
+        self.radius *= scale
+        self.update()
+
+        return
 
 
     def __str__(self):
@@ -217,7 +239,7 @@ class Simulation:
             fig = plt.figure()
             ax = fig.add_subplot(111, projection='3d')
             # ax.set_aspect('equal')
-            p = ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
+            h = ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
 
             if fit_ellipse:
                 ax.plot_wireframe(x, y, z,  rstride=4, cstride=4, color='k', alpha=0.2)
@@ -232,7 +254,7 @@ class Simulation:
                 mlab.mesh(x,y,z, opacity=0.25, color=(1,1,1))
 
             if show_hull:
-                mlab.triangular_mesh(hull_x, hull_y, hull_z, hull.simplices, representation='wireframe',color=(1,1,1))
+                mlab.triangular_mesh(hull_x, hull_y, hull_z, hull.simplices, representation='wireframe', color=(1,1,1))
 
         else:
             print('ERROR: using= must ne either mpl or maya')
@@ -695,13 +717,9 @@ class Simulation:
 
 
 
-    def to_liggghts(self, filename, density=1000., scale=None):
+    def to_liggghts(self, filename, density=100., num_types=2):
         """
         Write to a LIGGGHTS data file, suitable to be read into a simulation.
-
-        If scale= is set, the positions and radii are scaled by the given factor.
-        For example a sphere with radius 0.5 (arbitrary units) with scale=1.e6
-        will be written to the LIGGGHTS file as 0.5e-6.
         """
 
         # Save to a LAMMPS/LIGGGHTS data file, compatible with the read_data function
@@ -724,17 +742,30 @@ class Simulation:
         #
         # etc.
 
-        # TODO: implementing scaling for scale= option
+        basedir, fname = os.path.split(filename)
+        if fname.lower()[0:6] != 'data.':
+            fname = 'data.' + fname
+        filename = os.path.join(basedir, fname)
 
-        liggghts_file = open('data.' + filename, 'w')
+        liggghts_file = open(filename, 'w')
         liggghts_file.write('# LAMMPS data file\n\n')
+
+        # Make sure that we shift the particles above the Z axis, so that we can
+        # always set a floor at z=0 in LIGGGHTS!
+        if self.pos[:,2].min() < 0:
+            offset = abs(self.pos[:,2].min()) + 2.*self.radius.max()
+        else:
+            offset = 0.
+
 
         # TODO: update for aggregates once that code is in place
 
         liggghts_file.write(str(self.count) + ' atoms \n\n')
-        liggghts_file.write('1 atom types\n\n')
+        liggghts_file.write('%d atom types\n\n' % num_types)
 
         (xmin, xmax), (ymin, ymax), (zmin, zmax) = self.get_bb()
+        zmin += offset
+        zmax += offset
 
         liggghts_file.write(str(xmin) + ' ' + str(xmax) + ' xlo xhi\n')
         liggghts_file.write(str(ymin) + ' ' + str(ymax) + ' ylo yhi\n')
@@ -745,7 +776,7 @@ class Simulation:
         for idx in range(self.count):
 
             liggghts_file.write(str(self.id[idx]+1) + ' ' + str(1) + ' ' + str(2.*self.radius[idx]) + ' ' +
-                str(density) + ' ' + str(self.pos[idx,0]) + ' ' + str(self.pos[idx,1]) + ' ' + str(self.pos[idx,2]) + '\n')
+                str(density) + ' ' + str(self.pos[idx,0]) + ' ' + str(self.pos[idx,1]) + ' ' + str(self.pos[idx,2]+offset) + '\n')
 
         liggghts_file.close()
 
