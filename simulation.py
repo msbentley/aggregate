@@ -28,6 +28,8 @@ Requirements:
 import os
 import numpy as np
 from scipy.spatial.distance import cdist
+import matplotlib.pyplot as plt
+
 
 
 class Simulation:
@@ -66,6 +68,16 @@ class Simulation:
         self.debug = debug
 
 
+    def info(self):
+        """prints simulation information to the standard output"""
+
+        print('Number of particles: %d' % self.count)
+        print('Position array size: %d' % self.pos.shape[0])
+        print('Bounding box: %s' % str(self.get_bb()))
+
+        return
+
+
     def update(self):
         """Updates internally calculated parameters, such as mass and volume, after changes
         to the simulation"""
@@ -91,7 +103,7 @@ class Simulation:
         """
         Returns a string with the number of particles and the bounding box size.
         """
-        return "<Simulation object contaning %d particles>" % ( self.count )
+        return "<Simulation object containing %d particles>" % ( self.count )
 
 
 
@@ -159,7 +171,7 @@ class Simulation:
         # Khachiyan Algorithm
         while err > tolerance:
             V = np.dot(Q, np.dot(np.diag(u), QT))
-            M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q)))    # M the diagonal vector of an NxN matrix
+            M = np.diag(np.dot(QT , np.dot(linalg.inv(V), Q))) # M the diagonal vector of an NxN matrix
             j = np.argmax(M)
             maximum = M[j]
             step_size = (maximum - d - 1.0) / ((d + 1.0) * (maximum - 1.0))
@@ -182,8 +194,6 @@ class Simulation:
         radii = 1.0/np.sqrt(s)
 
         return (center, radii, rotation)
-
-
 
 
     def elongation(self):
@@ -234,10 +244,10 @@ class Simulation:
 
         if using=='mpl':
 
-            import matplotlib.pyplot as plt
             from mpl_toolkits.mplot3d import Axes3D
             fig = plt.figure()
-            ax = fig.add_subplot(111, projection='3d')
+            # ax = fig.add_subplot(111, projection='3d'
+            ax = Axes3D(fig) 
             # ax.set_aspect('equal')
             h = ax.scatter(self.pos[:,0], self.pos[:,1], self.pos[:,2], s=100.)
 
@@ -260,7 +270,6 @@ class Simulation:
             print('ERROR: using= must ne either mpl or maya')
 
         return h
-
 
 
     def add(self, pos, radius, density=1., check=False):
@@ -306,7 +315,7 @@ class Simulation:
             # TODO - implement aggregate checking
             pass
 
-            if not self.check(pos, radius):
+            if not self.check(sim.pos, sim.radius):
                 return False
 
         # TODO
@@ -442,7 +451,6 @@ class Simulation:
                 return True
 
 
-
     def farthest(self):
         """
         Returns the centre of the particle farthest from the origin
@@ -451,14 +459,12 @@ class Simulation:
         return self.pos.max()
 
 
-
     def com(self):
         """
         Computes the centre of mass
         """
 
         return np.average(self.pos[:self.count], axis=0, weights=self.mass[:self.count])
-
 
 
     def recentre(self):
@@ -470,12 +476,10 @@ class Simulation:
         self.pos -= self.com()
 
 
-
     def move(self, vector):
         """Move all particles in the simulation by the given vector"""
 
         self.pos += vector
-
 
 
     def gyration(self):
@@ -487,14 +491,12 @@ class Simulation:
         return np.sqrt(np.square(self.pos[:self.count]-self.com()).sum()/self.count)
 
 
-
     def char_rad(self):
         """
         Calculates the characteristic radius: a_c = sqrt(5/3) * R_g
         """
 
         return np.sqrt(5./3.) * self.gyration()
-
 
 
     def porosity_gyro(self):
@@ -508,7 +510,6 @@ class Simulation:
     def porosity_chull(self):
 
         return (1. - ( (self.volume[:self.count].sum()) / self.chull().volume ) )
-
 
 
     def density_gyro(self):
@@ -531,7 +532,6 @@ class Simulation:
         """
 
         return np.log(self.count/prefactor)/np.log(self.gyration()/self.radius[0:self.count].min())
-
 
 
     def fractal_mass_radius(self, num_pts=100, show=False):
@@ -660,8 +660,8 @@ class Simulation:
         """
 
         headertxt = 'id, x, y, z, radius'
-        np.savetxt(filename, np.hstack( (self.id[:,np.newaxis], self.pos, self.radius[:,np.newaxis]) ),
-            delimiter=",", header=headertxt)
+        np.savetxt(filename, np.hstack( self.id[0:self.count,np.newaxis], self.pos[0:self.count],
+            self.radius[0:self.count,np.newaxis] ), delimiter=",", header=headertxt)
 
         return
 
@@ -738,7 +738,8 @@ class Simulation:
         # 1 1 0.01952820 0.14099100 1.10066000 0.01073252 1000.0 1
         # 2 1 0.01811800 0.14345470 1.10433955 0.00536626 1000.0 1
         #
-        # atom-ID atom-type x y z diameter density molecule-ID
+        # atom-ID atom-type diameter density x y z
+
         #
         # etc.
 
@@ -816,7 +817,6 @@ class Simulation:
 
         if png is not None or show:
 
-            import matplotlib.pyplot as plt
             fig, ax = plt.subplots()
             ax.imshow(binary_image, cmap=plt.cm.binary, extent=[-farthest, farthest, -farthest, farthest])
 
@@ -934,7 +934,7 @@ class Simulation:
                           [ d[1], -d[0],    0]], dtype=np.float64)
 
         R = ddt + np.cos(angle) * (eye - ddt) + np.sin(angle) * skew
-        print R
+        print(R)
 
         self.pos = np.dot(self.pos, R)
 
@@ -965,12 +965,10 @@ def R_2vect(vector_orig, vector_fin):
     As here: http://svn.gna.org/svn/relax/tags/1.3.4/maths_fns/rotation_matrix.py
     """
 
-    from numpy import matlib
-    from numpy import array, cross, dot
+    from numpy import cross, dot
     from numpy.linalg import norm
     from math import acos, cos, sin
 
-    # R = matlib.zeros((3, 3))
     R = np.zeros( (3,3) )
 
     # Convert the vectors to unit vectors.
