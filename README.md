@@ -35,3 +35,16 @@ There are also methods to display or write the simulation data to various format
 * `to_afm` - calculates a simulated AFM image assuming an infinite tip
 * `to_gsf` - uses `to_afm` and outputs data to a [Gwyddion](http://gwyddion.net) simple file format
 * `to_liggghts` - writes a data file that can be read by [LIGGGHTS](http://www.cfdem.com/liggghts-open-source-discrete-element-method-particle-simulation-code)
+
+The most simple usage is as shown below:
+
+```python
+In [1]: from aggregate import builder
+In [2]: agg = builder.build_bpca()
+Generating particle 1024 of 1024
+In [3]: agg.porosity_gyro()
+Out[3]: 0.6464342819868891
+In [4]: agg.com()
+Out[4]: array([-0.29366738, -0.84070369,  0.81448045])
+In [5]: agg.show(using='mpl')```
+
