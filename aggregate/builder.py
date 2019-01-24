@@ -26,7 +26,17 @@ debug = False
 # to the bounding box method for spheres) of checking for aggregate intersect and
 # discarding those that can't possibly hit!
 
+# TODO: in general consider spheroidal monomers instead of spheres
 
+# TODO: set up a logger here, instead of global debug/prints
+
+# TODO: Add a builder that mixes cluster and particle aggregates with some distribution
+
+# TODO: general - add polydisperse monomers in a single aggregate
+
+# TODO: add QBCCA? (http://iopscience.iop.org/article/10.1088/0004-637X/707/2/1247/pdf)
+
+# TODO: add BAM1/BAM2 type aggregation? (allow for rolling rather than hit + stick)
 
 def build_hierarchical():
 
@@ -48,6 +58,8 @@ def build_bcca(num_pcles=1024, radius=0.5, overlap=None, store_aggs=False, use_s
     files will be loaded. If insufficient files are available, new aggregates
     will be generated. All files are saved/loaded to/from agg_path (default=.)
     """
+
+    import glob, os
 
     num_pcles = int(num_pcles)
     if not (num_pcles != 0 and ((num_pcles & (num_pcles - 1)) == 0)):
@@ -76,12 +88,14 @@ def build_bcca(num_pcles=1024, radius=0.5, overlap=None, store_aggs=False, use_s
     [agg_list.append(build_bpca(num_pcles=2, radius=radius, output=False, overlap=overlap)) for i in range(num_pcles/2)]
     [agg.recentre() for agg in agg_list]
 
+    # loop over generations needed
     for idx, gen in enumerate(range(num_gens-1,0,-1)):
 
         num_aggs = 2**gen
         print('INFO: Building generation %d with %d aggregates of %d monomers' % (idx+1,num_aggs,2**(idx+1)))
 
-        next_list = []
+        next_list = [] # the list of next generation aggregate (half as big as agg_list)
+        
         for agg_idx in range(0,num_aggs,2):
             sim = Simulation(max_pcles=num_pcles)
             agg1 = agg_list[agg_idx]
@@ -124,6 +138,14 @@ def build_bcca(num_pcles=1024, radius=0.5, overlap=None, store_aggs=False, use_s
                     sim.add_agg(agg2)
                     sim.recentre()
                     next_list.append(sim)
+
+                    if store_aggs:
+                        # bcca_gen_<m>_<id>.csv
+                        agg_files = glob.glob(os.path.join(agg_path, 'bcca_gen_%03d_*.csv' % (idx+1)))
+                        id_list = [int(os.path.basename(f).split('_')[3].split('.')[0]) for f in agg_files]
+                        agg_id = 1 if len(id_list) == 0 else max(id_list) + 1
+                        agg_file = os.path.join(agg_path, 'bcca_gen_%03d_%03d.csv' % (idx+1, agg_id))
+                        agg2.to_csv(agg_file)
 
         agg_list = next_list
 
