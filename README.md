@@ -31,7 +31,7 @@ There are also methods to display or write the simulation data to various format
 * `show` - displays the aggregate in 3D using `mayavi` or `matplotlib`
 * `projection` - calculates a 2D projection of the aggregate in a given direction
 * `to_csv` - output to a simple comma separated value file
-* `to_vtk' - output to a VTK file (uses [evtk](https://bitbucket.org/pauloh/pyevtk)!)
+* `to_vtk` - output to a VTK file (uses [evtk](https://bitbucket.org/pauloh/pyevtk)!)
 * `to_afm` - calculates a simulated AFM image assuming an infinite tip
 * `to_gsf` - uses `to_afm` and outputs data to a [Gwyddion](http://gwyddion.net) simple file format
 * `to_liggghts` - writes a data file that can be read by [LIGGGHTS](http://www.cfdem.com/liggghts-open-source-discrete-element-method-particle-simulation-code)
@@ -46,5 +46,6 @@ In [3]: agg.porosity_gyro()
 Out[3]: 0.6464342819868891
 In [4]: agg.com()
 Out[4]: array([-0.29366738, -0.84070369,  0.81448045])
-In [5]: agg.show(using='mpl')```
+In [5]: agg.show(using='mpl')
+```
 
